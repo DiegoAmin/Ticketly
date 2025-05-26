@@ -3,11 +3,9 @@ package com.example.torniqueteapp
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.util.Base64
 import android.util.Log
 import android.widget.Button
 import android.widget.TextView
-import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
@@ -24,26 +22,30 @@ import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
-import java.nio.charset.StandardCharsets
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 class QrScannerActivity : AppCompatActivity() {
-    private lateinit var database: FirebaseDatabase
-    private lateinit var auth: FirebaseAuth
-    private lateinit var previewView: PreviewView
-    private lateinit var btnLogout: Button
-    private lateinit var tvScanResult: TextView
+    // Instancias de Firebase
+    private lateinit var database: FirebaseDatabase // Para acceder a Realtime Database
+    private lateinit var auth: FirebaseAuth // Para autenticación
 
-    private var cameraProvider: ProcessCameraProvider? = null
-    private lateinit var cameraExecutor: ExecutorService
-    private var isAnalyzing = true
+    // Componentes de UI
+    private lateinit var previewView: PreviewView // Vista previa de la cámara
+    private lateinit var btnLogout: Button // Botón para cerrar sesión
+    private lateinit var tvScanResult: TextView // Para mostrar resultados del escaneo
 
+    // Variables para manejo de cámara
+    private var cameraProvider: ProcessCameraProvider? = null // Proveedor de cámara
+    private lateinit var cameraExecutor: ExecutorService // Ejecutor para procesos de cámara
+    private var isAnalyzing = true // Controla si se debe seguir analizando imágenes
+
+    // Lanzador para solicitud de permisos
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            setupQrScanner()
+            setupQrScanner() // Configura el escáner si se otorga permiso
         } else {
             showErrorMessage("Se requiere permiso de cámara para escanear QR")
         }
@@ -53,31 +55,38 @@ class QrScannerActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_scanner)
 
+        // Inicialización de Firebase y componentes
         database = FirebaseDatabase.getInstance()
         auth = FirebaseAuth.getInstance()
-        cameraExecutor = Executors.newSingleThreadExecutor()
+        cameraExecutor = Executors.newSingleThreadExecutor() // Ejecutor de un solo hilo para cámara
 
+        // Vinculación de vistas
         previewView = findViewById(R.id.previewView)
         btnLogout = findViewById(R.id.btnLogout)
         tvScanResult = findViewById(R.id.tvScanResult)
 
+        // Configuración del botón de logout
         btnLogout.setOnClickListener {
             auth.signOut()
             startActivity(Intent(this, LoginActivity::class.java))
             finish()
         }
 
+        // Verificación y solicitud de permisos
         if (ContextCompat.checkSelfPermission(
                 this,
                 android.Manifest.permission.CAMERA
             ) == PackageManager.PERMISSION_GRANTED
         ) {
-            setupQrScanner()
+            setupQrScanner() // Si ya tiene permisos, configura el escáner
         } else {
             requestPermissionLauncher.launch(android.Manifest.permission.CAMERA)
         }
     }
 
+    /**
+     * Configura el escáner QR y la cámara
+     */
     @OptIn(ExperimentalGetImage::class)
     private fun setupQrScanner() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
@@ -85,7 +94,7 @@ class QrScannerActivity : AppCompatActivity() {
         cameraProviderFuture.addListener({
             try {
                 cameraProvider = cameraProviderFuture.get()
-                bindCameraUseCases()
+                bindCameraUseCases() // Vincula los casos de uso de la cámara
             } catch (exc: Exception) {
                 Log.e(TAG, "Error al inicializar cámara", exc)
                 showErrorMessage("Error al iniciar cámara: ${exc.message}")
@@ -93,17 +102,22 @@ class QrScannerActivity : AppCompatActivity() {
         }, ContextCompat.getMainExecutor(this))
     }
 
+    /**
+     * Vincula los casos de uso de la cámara (previsualización y análisis)
+     */
     @androidx.annotation.OptIn(ExperimentalGetImage::class)
     @OptIn(ExperimentalGetImage::class)
     private fun bindCameraUseCases() {
         val cameraProvider = cameraProvider ?: return
 
+        // Configuración de la vista previa
         val preview = Preview.Builder()
             .build()
             .also {
                 it.setSurfaceProvider(previewView.surfaceProvider)
             }
 
+        // Configuración del análisis de imagen para QR
         val imageAnalysis = ImageAnalysis.Builder()
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .build()
@@ -120,34 +134,37 @@ class QrScannerActivity : AppCompatActivity() {
                         imageProxy.imageInfo.rotationDegrees
                     )
 
+                    // Configuración del escáner de códigos QR
                     val options = BarcodeScannerOptions.Builder()
                         .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
                         .build()
 
+                    // Procesamiento del código QR
                     BarcodeScanning.getClient(options)
                         .process(inputImage)
                         .addOnSuccessListener { barcodes ->
                             if (barcodes.isNotEmpty()) {
                                 val qrCode = barcodes.first().rawValue
                                 qrCode?.let { code ->
-                                    isAnalyzing = false
+                                    isAnalyzing = false // Detiene análisis temporalmente
                                     runOnUiThread {
-                                        validateQrCode(code)
+                                        validateQrCode(code) // Valida el código encontrado
                                     }
                                 }
                             }
                         }
                         .addOnCompleteListener {
-                            imageProxy.close()
+                            imageProxy.close() // Cierra el proxy de imagen
                         }
                 }
             }
 
         try {
             cameraProvider.unbindAll()
+            // Vincula los casos de uso al ciclo de vida
             cameraProvider.bindToLifecycle(
                 this,
-                CameraSelector.DEFAULT_BACK_CAMERA,
+                CameraSelector.DEFAULT_BACK_CAMERA, // Usa cámara trasera
                 preview,
                 imageAnalysis
             )
@@ -157,12 +174,16 @@ class QrScannerActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Valida el código QR escaneado con Firebase Database
+     * @param qrCode El código QR escaneado
+     */
     private fun validateQrCode(qrCode: String) {
         Log.d(TAG, "----------------------------------------")
         Log.d(TAG, "QR escaneado (original): $qrCode")
 
         try {
-            // Ahora buscamos directamente por el código original
+            // Referencia al código QR en la base de datos
             val qrRef = database.getReference("qr_codes").child(qrCode)
             Log.d(TAG, "Buscando en: /qr_codes/$qrCode")
 
@@ -177,23 +198,24 @@ class QrScannerActivity : AppCompatActivity() {
                     when (status) {
                         "active" -> {
                             Log.d(TAG, "Actualizando estado a 'utilizado'")
+                            // Datos para actualizar
                             val updates = hashMapOf<String, Any>(
-                                "status" to "utilizado",
-                                "usedAt" to ServerValue.TIMESTAMP,
-                                "usedBy" to (auth.currentUser?.uid ?: "unknown")
+                                "status" to "used",
+                                "usedAt" to ServerValue.TIMESTAMP, // Marca de tiempo del servidor
+                                "usedBy" to (auth.currentUser?.uid ?: "unknown") // ID de usuario
                             )
 
                             qrRef.updateChildren(updates)
                                 .addOnSuccessListener {
                                     Log.d(TAG, "QR actualizado correctamente")
-                                    showSuccessMessage("Buen viaje")
+                                    showSuccessMessage("Buen viaje") // Mensaje de éxito
                                 }
                                 .addOnFailureListener { e ->
                                     Log.e(TAG, "Error al actualizar QR", e)
                                     showErrorMessage("Error al actualizar estado del QR")
                                 }
                         }
-                        "utilizado" -> {
+                        "used" -> {
                             Log.d(TAG, "QR ya fue utilizado anteriormente")
                             showErrorMessage("QR utilizado, Genere un nuevo QR para ingresar")
                         }
@@ -206,7 +228,7 @@ class QrScannerActivity : AppCompatActivity() {
                     Log.d(TAG, "QR NO encontrado en Firebase")
                     showErrorMessage("QR no registrado en el sistema")
 
-                    // DEBUG: Mostrar estructura completa de /qrcodes
+                    // DEBUG: Muestra todos los códigos QR (solo para desarrollo)
                     database.getReference("qr_codes").get()
                         .addOnSuccessListener { allQRCodes ->
                             Log.d(TAG, "Contenido completo de /qrcodes:")
@@ -224,32 +246,45 @@ class QrScannerActivity : AppCompatActivity() {
             showErrorMessage("Formato de QR no válido")
         }
     }
+
+    /**
+     * Muestra un mensaje de éxito
+     * @param message Mensaje a mostrar
+     */
     private fun showSuccessMessage(message: String) {
         tvScanResult.text = "✓ $message"
-        //Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-        resetScannerAfterDelay()
+        resetScannerAfterDelay() // Reinicia el escáner después de un retraso
     }
 
+    /**
+     * Muestra un mensaje de error
+     * @param message Mensaje a mostrar
+     */
     private fun showErrorMessage(message: String) {
         tvScanResult.text = "✗ $message"
-        //Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-        resetScannerAfterDelay()
+        resetScannerAfterDelay() // Reinicia el escáner después de un retraso
     }
 
+    /**
+     * Reinicia el escáner después de un retraso (3 segundos)
+     */
     private fun resetScannerAfterDelay() {
         previewView.postDelayed({
-            isAnalyzing = true
-            tvScanResult.text = "Escanea un código QR"
+            isAnalyzing = true // Reactiva el análisis
+            tvScanResult.text = "Escanea un código QR" // Restablece el mensaje
         }, 3000)
     }
 
+    /**
+     * Limpieza al destruir la actividad
+     */
     override fun onDestroy() {
         super.onDestroy()
-        cameraExecutor.shutdown()
-        cameraProvider?.unbindAll()
+        cameraExecutor.shutdown() // Apaga el ejecutor
+        cameraProvider?.unbindAll() // Libera la cámara
     }
 
     companion object {
-        private const val TAG = "QrScannerActivity"
+        private const val TAG = "QrScannerActivity" // Tag para logs
     }
 }
