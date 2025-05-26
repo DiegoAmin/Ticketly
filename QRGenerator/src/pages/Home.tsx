@@ -17,13 +17,15 @@ import {
   IonCol,
   IonIcon,
 } from "@ionic/react";
-import { qrCodeOutline, logOutOutline } from 'ionicons/icons';
+import { qrCodeOutline, logOutOutline, peopleOutline, walkOutline } from 'ionicons/icons';
 import { useAuth } from "../contexts/auth";
 import { useEffect, useState } from "react";
 import { v4 } from "uuid";
 import { firebase, database } from "../../config";
 import CreateQrModal from "../components/CreateQRModal";
 import "./Home.css";
+import UserListModal from "../components/UserListModal";
+import CreateTorniqueteModal from "../components/CreateProfileModal";
 
 type QR_CODE = {
   description: string;
@@ -46,6 +48,8 @@ export default function Home() {
   const { user, logout } = useAuth();
   const [qrCodes, setQrCodes] = useState<Record<string, QR_CODE>>({});
   const [showModal, setShowModal] = useState(false);
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [showTorniqueteModal, setShowTorniqueteModal] = useState(false);
 
   function createQrCode(data: { name: string; description: string }) {
     try {
@@ -82,6 +86,16 @@ export default function Home() {
         }}
       />
 
+      <UserListModal
+        isOpen={showUserModal}
+        onDismiss={() => setShowUserModal(false)}
+      />
+
+      <CreateTorniqueteModal
+        isOpen={showTorniqueteModal}
+        onDismiss={() => setShowTorniqueteModal(false)}
+      />
+
       <IonHeader>
         <IonToolbar>
           <IonTitle>Dashboard</IonTitle>
@@ -90,19 +104,36 @@ export default function Home() {
 
       <IonContent className="ion-padding">
         <IonGrid>
-          <IonRow className="home-header-row">
+          <IonRow className="home-header-row ion-align-items-center ion-justify-content-between">
             <IonCol size="12">
               <h2>Welcome, {user?.email}</h2>
-              <IonButton onClick={logout} color="danger" size="small">
-                <IonIcon slot="start" icon={logOutOutline}></IonIcon>
+            </IonCol>
+            <IonCol size="6" size-md="3">
+              <IonButton expand="block" color="danger" onClick={logout}>
+                <IonIcon slot="start" icon={logOutOutline} />
                 Log Out
               </IonButton>
-              <IonButton onClick={() => setShowModal(true)} size="small" className="" >
-                <IonIcon slot="start" icon={qrCodeOutline}></IonIcon>
+            </IonCol>
+            <IonCol size="6" size-md="3">
+              <IonButton expand="block" onClick={() => setShowModal(true)}>
+                <IonIcon slot="start" icon={qrCodeOutline} />
                 Create QR Code
               </IonButton>
             </IonCol>
+            <IonCol size="6" size-md="3">
+              <IonButton expand="block" onClick={() => setShowUserModal(true)}>
+                <IonIcon slot="start" icon={peopleOutline} />
+                View Users
+              </IonButton>
+            </IonCol>
+            <IonCol size="6" size-md="3">
+              <IonButton expand="block" onClick={() => setShowTorniqueteModal(true)}>
+                <IonIcon slot="start" icon={walkOutline} />
+                Create Profile
+              </IonButton>
+            </IonCol>
           </IonRow>
+
 
           <IonRow className="qr-card-grid">
             {Object.entries(qrCodes).map(([id, info]) => (

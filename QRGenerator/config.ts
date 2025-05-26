@@ -21,3 +21,6 @@ const auth = firebase.auth(app);
 const database = firebase.database();
 
 export { firebase, auth, database };
+
+export const secondaryApp = firebase.initializeApp(firebaseConfig, "Secondary");
+export const secondaryAuth = secondaryApp.auth();
